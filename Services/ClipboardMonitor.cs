@@ -22,6 +22,14 @@ public sealed class ClipboardMonitor : IDisposable
         AddClipboardFormatListener(_hwnd);
     }
 
+    public void Stop()
+    {
+        if (_hwnd != nint.Zero)
+            RemoveClipboardFormatListener(_hwnd);
+
+        _hwndSource?.RemoveHook(WndProc);
+    }
+
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
     {
         if (msg == WM_CLIPBOARDUPDATE)

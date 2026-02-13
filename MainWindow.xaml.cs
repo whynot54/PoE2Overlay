@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -14,7 +15,6 @@ namespace PoE2Overlay;
 public partial class MainWindow : Window
 {
     private nint _hwnd;
-    private bool _isClickThrough = true;
     private readonly ClipboardMonitor _clipboardMonitor = new();
     private TradeApiClient _tradeApi;
     private readonly LeagueService _leagueService = new();
@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private int _dismissCountdown;
     private PriceResult? _currentPriceResult;
     private bool _listingsExpanded;
+    private bool _monitoringActive;
 
     public MainWindow()
     {
@@ -42,6 +43,10 @@ public partial class MainWindow : Window
         KeyDown += OnKeyDown;
     }
 
+    // Make this window invisible to UI Automation so it doesn't block
+    // Windows Voice Typing and other accessibility tools from detecting text fields
+    protected override AutomationPeer? OnCreateAutomationPeer() => null;
+
     // ═══════════════════════════════════════════════════
     // INITIALIZATION
     // ═══════════════════════════════════════════════════
@@ -49,12 +54,41 @@ public partial class MainWindow : Window
     private async void OnSourceInitialized(object? sender, EventArgs e)
     {
         _hwnd = new WindowInteropHelper(this).Handle;
-        EnableClickThrough();
+
+        // Hook WndProc to prevent mouse clicks from activating this window
+        var source = HwndSource.FromHwnd(_hwnd);
+        source?.AddHook(WndProc);
+
+        // Set WS_EX_TOOLWINDOW + WS_EX_NOACTIVATE so we never steal focus
+        var style = NativeMethods.GetWindowLongPtr(_hwnd, NativeMethods.GWL_EXSTYLE);
+        NativeMethods.SetWindowLongPtr(
+            _hwnd,
+            NativeMethods.GWL_EXSTYLE,
+            style | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
+
+        PositionBottomRight();
+
         _clipboardMonitor.ClipboardChanged += OnClipboardChanged;
-        _clipboardMonitor.Start(this);
 
         await _leagueService.InitializeAsync();
         InitializeSettings();
+    }
+
+    private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        if (msg == NativeMethods.WM_MOUSEACTIVATE)
+        {
+            handled = true;
+            return NativeMethods.MA_NOACTIVATE;
+        }
+        return nint.Zero;
+    }
+
+    private void PositionBottomRight()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Left = workArea.Right - ActualWidth - 20;
+        Top = workArea.Bottom - ActualHeight - 20;
     }
 
     private void InitializeSettings()
@@ -154,10 +188,12 @@ public partial class MainWindow : Window
         // Apply opacity
         ItemTooltip.Opacity = _config.OverlayOpacity;
 
-        // Show and make interactive
+        // Show tooltip and reposition
         ItemTooltip.Visibility = Visibility.Visible;
-        DisableClickThrough();
         StartAutoDismissTimer();
+
+        // Reposition after layout updates
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
     }
 
     private async Task FetchPriceAsync(ItemData item)
@@ -196,6 +232,9 @@ public partial class MainWindow : Window
                 ListingCountText.Visibility = Visibility.Visible;
 
                 ActionButtonsPanel.Visibility = Visibility.Visible;
+
+                // Reposition after price info changes size
+                Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
             });
         }
         catch (OperationCanceledException) { }
@@ -317,6 +356,8 @@ public partial class MainWindow : Window
             ExpandButton.Content = "Expand Listings";
             UpdateDismissHint();
         }
+
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
     }
 
     private void OpenTradeButton_OnClick(object sender, RoutedEventArgs e)
@@ -334,14 +375,38 @@ public partial class MainWindow : Window
         if (SettingsPanel.Visibility == Visibility.Visible)
         {
             SettingsPanel.Visibility = Visibility.Collapsed;
-            if (ItemTooltip.Visibility != Visibility.Visible)
-                EnableClickThrough();
         }
         else
         {
             SettingsPanel.Visibility = Visibility.Visible;
-            DisableClickThrough();
         }
+
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
+    }
+
+    private void ToggleMonitorButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_monitoringActive)
+        {
+            _clipboardMonitor.Stop();
+            _monitoringActive = false;
+            ToggleMonitorButton.Content = "\u25B6";
+            ToggleMonitorButton.ToolTip = "Start monitoring";
+            StatusText.Text = "Stopped";
+            StatusText.Foreground = (Brush)FindResource("DimText");
+            DismissTooltip();
+        }
+        else
+        {
+            _clipboardMonitor.Start(this);
+            _monitoringActive = true;
+            ToggleMonitorButton.Content = "\u25A0";
+            ToggleMonitorButton.ToolTip = "Stop monitoring";
+            StatusText.Text = "Monitoring";
+            StatusText.Foreground = (Brush)FindResource("AccentGreen");
+        }
+
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
     }
 
     private void ExitButton_OnClick(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
@@ -349,8 +414,7 @@ public partial class MainWindow : Window
     private void SettingsCloseButton_OnClick(object sender, RoutedEventArgs e)
     {
         SettingsPanel.Visibility = Visibility.Collapsed;
-        if (ItemTooltip.Visibility != Visibility.Visible)
-            EnableClickThrough();
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
     }
 
     private void LeagueComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -416,9 +480,9 @@ public partial class MainWindow : Window
         _priceCts?.Cancel();
         _listingsExpanded = false;
         ItemTooltip.Visibility = Visibility.Collapsed;
+        ListingsPanel.Visibility = Visibility.Collapsed;
 
-        if (SettingsPanel.Visibility != Visibility.Visible)
-            EnableClickThrough();
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e)
@@ -431,36 +495,6 @@ public partial class MainWindow : Window
             DismissTooltip();
             e.Handled = true;
         }
-    }
-
-    // ═══════════════════════════════════════════════════
-    // CLICK-THROUGH
-    // ═══════════════════════════════════════════════════
-
-    private void EnableClickThrough()
-    {
-        var style = NativeMethods.GetWindowLongPtr(_hwnd, NativeMethods.GWL_EXSTYLE);
-        NativeMethods.SetWindowLongPtr(
-            _hwnd,
-            NativeMethods.GWL_EXSTYLE,
-            style
-            | NativeMethods.WS_EX_TRANSPARENT
-            | NativeMethods.WS_EX_TOOLWINDOW
-            | NativeMethods.WS_EX_NOACTIVATE);
-        _isClickThrough = true;
-    }
-
-    private void DisableClickThrough()
-    {
-        var style = NativeMethods.GetWindowLongPtr(_hwnd, NativeMethods.GWL_EXSTYLE);
-        NativeMethods.SetWindowLongPtr(
-            _hwnd,
-            NativeMethods.GWL_EXSTYLE,
-            (style & ~(nint)(NativeMethods.WS_EX_TRANSPARENT | NativeMethods.WS_EX_NOACTIVATE))
-            | NativeMethods.WS_EX_TOOLWINDOW);
-        _isClickThrough = false;
-        Activate();
-        Focus();
     }
 
     // ═══════════════════════════════════════════════════

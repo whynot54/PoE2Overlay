@@ -10,7 +10,7 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
-        WindowState="Maximized"
+        SizeToContent="WidthAndHeight"
         ResizeMode="NoResize">
 
     <Window.Resources>
@@ -84,14 +84,12 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <StackPanel>
         <!-- ═══════════════════════════════════════════════════ -->
         <!-- ITEM TOOLTIP                                        -->
         <!-- ═══════════════════════════════════════════════════ -->
         <Border x:Name="ItemTooltip"
                 Visibility="Collapsed"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
                 Padding="16,12,16,12"
                 CornerRadius="10"
                 Background="{StaticResource PanelBg}"
@@ -196,39 +194,68 @@
         </Border>
 
         <!-- ═══════════════════════════════════════════════════ -->
-        <!-- GEAR ICON BUTTON                                    -->
+        <!-- CONTROL BAR: Start/Stop + Status + Gear             -->
         <!-- ═══════════════════════════════════════════════════ -->
-        <Button x:Name="GearButton"
-                Click="GearButton_OnClick"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Bottom"
-                Margin="0,0,20,20"
-                Width="36" Height="36"
-                Cursor="Hand" ToolTip="Settings">
-            <Button.Template>
-                <ControlTemplate TargetType="Button">
-                    <Grid>
-                        <Ellipse x:Name="BgEllipse" Fill="#66222222" Width="36" Height="36" />
-                        <TextBlock Text="&#x2699;" FontSize="20" Foreground="#AAAAAA"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Grid>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="BgEllipse" Property="Fill" Value="#88333333" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Button.Template>
-        </Button>
+        <Border Background="#CC1A1A2E" CornerRadius="8" Padding="6,4" Margin="0,4,0,0">
+            <DockPanel>
+                <!-- Gear button on the right -->
+                <Button x:Name="GearButton"
+                        DockPanel.Dock="Right"
+                        Click="GearButton_OnClick"
+                        Width="28" Height="28"
+                        Cursor="Hand" ToolTip="Settings">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid>
+                                <Ellipse x:Name="BgEllipse" Fill="Transparent" Width="28" Height="28" />
+                                <TextBlock Text="&#x2699;" FontSize="16" Foreground="#AAAAAA"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="BgEllipse" Property="Fill" Value="#33FFFFFF" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Start/Stop toggle on the left -->
+                <Button x:Name="ToggleMonitorButton"
+                        DockPanel.Dock="Left"
+                        Click="ToggleMonitorButton_OnClick"
+                        Content="&#x25B6;"
+                        Width="28" Height="28"
+                        Cursor="Hand" ToolTip="Start monitoring">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid>
+                                <Ellipse x:Name="BgEllipse" Fill="Transparent" Width="28" Height="28" />
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="BgEllipse" Property="Fill" Value="#33FFFFFF" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Status text in the middle -->
+                <TextBlock x:Name="StatusText" Text="Stopped"
+                           FontSize="11" Foreground="#777777"
+                           VerticalAlignment="Center" Margin="6,0"
+                           HorizontalAlignment="Center" />
+            </DockPanel>
+        </Border>
 
         <!-- ═══════════════════════════════════════════════════ -->
         <!-- SETTINGS PANEL                                      -->
         <!-- ═══════════════════════════════════════════════════ -->
         <Border x:Name="SettingsPanel"
                 Visibility="Collapsed"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Bottom"
-                Margin="0,0,20,70"
+                Margin="0,4,0,0"
                 Padding="16"
                 CornerRadius="10"
                 Background="{StaticResource PanelBg}"
@@ -315,5 +342,5 @@
                 </Button>
             </StackPanel>
         </Border>
-    </Grid>
+    </StackPanel>
 </Window>

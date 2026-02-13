@@ -4,8 +4,8 @@ A lightweight, transparent overlay for **Path of Exile 2** that provides real-ti
 
 ## Features
 
-- **Ghost Window** — Transparent, always-on-top overlay that doesn't steal focus or interfere with gameplay
-- **Click-Through** — Mouse clicks pass through to the game; overlay becomes interactive only when showing results
+- **Non-Intrusive Overlay** — Compact bottom-right popup that never steals focus or interferes with gameplay
+- **Manual Start/Stop** — Clipboard monitoring is off by default; toggle it on only when you need it
 - **Clipboard Price Check** — Ctrl+C an item in-game and instantly see its market price
 - **Trade API Integration** — Queries the official PoE 2 trade site with rate limiting
 - **Expandable Listings** — View individual listings with price, seller, and time posted
@@ -56,12 +56,14 @@ dotnet run -- --debug
 ```
 
 ### In-Game
-1. Hover over an item in Path of Exile 2
-2. Press **Ctrl+C** to copy the item
-3. The overlay shows the item details and fetches the price
-4. Click **Expand Listings** to see individual trade listings
-5. Click **Open on Trade Site** to view on pathofexile.com
-6. Press **Escape** or wait for auto-dismiss to close
+1. Click the **▶ (play) button** on the overlay to start clipboard monitoring
+2. Hover over an item in Path of Exile 2
+3. Press **Ctrl+C** to copy the item
+4. The overlay shows the item details and fetches the price
+5. Click **Expand Listings** to see individual trade listings
+6. Click **Open on Trade Site** to view on pathofexile.com
+7. Press **Escape** or wait for auto-dismiss to close
+8. Click the **■ (stop) button** when done to stop monitoring
 
 ### Settings
 Click the gear icon (bottom-right) to access:
@@ -117,7 +119,7 @@ PoE2Overlay/
 ## Tech Stack
 
 - **WPF (.NET 9)** — Native Windows UI with low overhead
-- **Win32 Interop** — Ghost window via `WS_EX_TRANSPARENT`, `WS_EX_TOOLWINDOW`, `WS_EX_NOACTIVATE`
+- **Win32 Interop** — Non-activating window via `WS_EX_TOOLWINDOW`, `WS_EX_NOACTIVATE`, and `WM_MOUSEACTIVATE` hook
 - **PoE 2 Trade API** — Official GGG trade endpoints with rate limiting
 
 ## Security
