@@ -6,4 +6,6 @@ public sealed class AppConfig
     public string LeagueOverride { get; set; } = string.Empty;
     public int AutoDismissSeconds { get; set; } = 15;
     public double OverlayOpacity { get; set; } = 0.93;
+    public string AccountName { get; set; } = string.Empty;
+    public string ActiveProfile { get; set; } = "Default";
 }

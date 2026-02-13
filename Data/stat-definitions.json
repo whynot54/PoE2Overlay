@@ -1,0 +1,93 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-02-13",
+  "categories": {
+    "LifeAndES": {
+      "displayName": "Life & ES",
+      "patterns": [
+        { "regex": "\\+\\d+ to maximum Life", "type": "flat" },
+        { "regex": "\\d+% increased maximum Life", "type": "percent" },
+        { "regex": "\\+\\d+ to maximum Energy Shield", "type": "flat" },
+        { "regex": "\\d+% increased maximum Energy Shield", "type": "percent" },
+        { "regex": "Regenerate \\d+\\.?\\d* Life per second", "type": "flat" }
+      ]
+    },
+    "EleResist": {
+      "displayName": "Elemental Resists",
+      "patterns": [
+        { "regex": "\\+\\d+% to Fire Resistance", "type": "flat" },
+        { "regex": "\\+\\d+% to Cold Resistance", "type": "flat" },
+        { "regex": "\\+\\d+% to Lightning Resistance", "type": "flat" },
+        { "regex": "\\+\\d+% to all Elemental Resistances", "type": "flat" }
+      ]
+    },
+    "ChaosResist": {
+      "displayName": "Chaos Resist",
+      "patterns": [
+        { "regex": "\\+\\d+% to Chaos Resistance", "type": "flat" }
+      ]
+    },
+    "PhysicalDefense": {
+      "displayName": "Physical Defense",
+      "patterns": [
+        { "regex": "\\+\\d+ to Armour", "type": "flat" },
+        { "regex": "\\d+% increased Armour", "type": "percent" },
+        { "regex": "\\+\\d+ to Evasion Rating", "type": "flat" },
+        { "regex": "\\d+% increased Evasion Rating", "type": "percent" }
+      ]
+    },
+    "SpellDamage": {
+      "displayName": "Spell Damage",
+      "patterns": [
+        { "regex": "\\d+% increased Spell Damage", "type": "percent" },
+        { "regex": "\\d+% increased Elemental Damage", "type": "percent" },
+        { "regex": "\\+\\d+ to Level of all .* Spell Skill Gems", "type": "flat" },
+        { "regex": "Adds \\d+ to \\d+ .* Damage to Spells", "type": "flat" }
+      ]
+    },
+    "AttackDamage": {
+      "displayName": "Attack Damage",
+      "patterns": [
+        { "regex": "\\d+% increased Physical Damage", "type": "percent" },
+        { "regex": "Adds \\d+ to \\d+ Physical Damage", "type": "flat" },
+        { "regex": "Adds \\d+ to \\d+ .* Damage", "type": "flat" },
+        { "regex": "\\d+% increased Melee Damage", "type": "percent" }
+      ]
+    },
+    "Speed": {
+      "displayName": "Speed",
+      "patterns": [
+        { "regex": "\\d+% increased Attack Speed", "type": "percent" },
+        { "regex": "\\d+% increased Cast Speed", "type": "percent" },
+        { "regex": "\\d+% increased Movement Speed", "type": "percent" }
+      ]
+    },
+    "Critical": {
+      "displayName": "Critical",
+      "patterns": [
+        { "regex": "\\d+% increased Critical Hit Chance", "type": "percent" },
+        { "regex": "\\+\\d+% to Critical Hit Multiplier", "type": "flat" },
+        { "regex": "\\+\\d+\\.?\\d*% to Critical Hit Chance", "type": "flat" }
+      ]
+    },
+    "ManaAndRegen": {
+      "displayName": "Mana & Regen",
+      "patterns": [
+        { "regex": "\\+\\d+ to maximum Mana", "type": "flat" },
+        { "regex": "\\d+% increased maximum Mana", "type": "percent" },
+        { "regex": "\\d+% increased Mana Regeneration Rate", "type": "percent" },
+        { "regex": "\\-\\d+ to Total Mana Cost", "type": "flat" }
+      ]
+    },
+    "Utility": {
+      "displayName": "Utility",
+      "patterns": [
+        { "regex": "\\+\\d+ to Strength", "type": "flat" },
+        { "regex": "\\+\\d+ to Dexterity", "type": "flat" },
+        { "regex": "\\+\\d+ to Intelligence", "type": "flat" },
+        { "regex": "\\+\\d+ to all Attributes", "type": "flat" },
+        { "regex": "\\d+% increased Rarity of Items found", "type": "percent" }
+      ]
+    }
+  }
+}
