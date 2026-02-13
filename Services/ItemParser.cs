@@ -181,6 +181,27 @@ public static partial class ItemParser
     [GeneratedRegex(@"\d+")]
     private static partial Regex NumberPattern();
 
+    public static EquipmentSlot? DetectSlot(ItemData item)
+    {
+        return item.ItemClass.ToLowerInvariant() switch
+        {
+            "helmets" => EquipmentSlot.Helmet,
+            "body armours" => EquipmentSlot.BodyArmour,
+            "gloves" => EquipmentSlot.Gloves,
+            "boots" => EquipmentSlot.Boots,
+            "belts" => EquipmentSlot.Belt,
+            "amulets" => EquipmentSlot.Amulet,
+            "rings" => EquipmentSlot.Ring1,
+            "one hand maces" or "one hand swords" or "one hand axes"
+                or "claws" or "daggers" or "wands" or "sceptres"
+                or "thrusting one hand swords" => EquipmentSlot.Weapon,
+            "two hand maces" or "two hand swords" or "two hand axes"
+                or "bows" or "staves" or "warstaves" => EquipmentSlot.Weapon,
+            "shields" or "quivers" or "foci" => EquipmentSlot.Offhand,
+            _ => null
+        };
+    }
+
     [GeneratedRegex(@"[+\-]?\d+[%]?|increased|reduced|to maximum")]
     private static partial Regex ModLinePattern();
 }
