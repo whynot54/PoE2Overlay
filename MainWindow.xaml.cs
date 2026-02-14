@@ -747,31 +747,75 @@ public partial class MainWindow : Window
         DreamBuildGrid.Children.Clear();
         foreach (var slot in Enum.GetValues<EquipmentSlot>())
         {
-            var slotName = slot.ToString();
+            var slotName = FormatSlotName(slot);
             ItemData? item = null;
-            var hasTarget = _activeProfile?.DreamBuild.TryGetValue(slotName, out item) == true && item != null;
-            var displayText = hasTarget ? $"{slotName}\n{item!.Name}" : slotName;
+            var hasTarget = _activeProfile?.DreamBuild.TryGetValue(slot.ToString(), out item) == true && item != null;
+
+            // Build a StackPanel with slot label + item name for better readability
+            var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            content.Children.Add(new TextBlock
+            {
+                Text = slotName,
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Foreground = hasTarget
+                    ? (Brush)FindResource("AccentGreen")
+                    : (Brush)FindResource("BrightText")
+            });
+
+            if (hasTarget)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = item!.Name,
+                    FontSize = 10,
+                    FontStyle = FontStyles.Italic,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Foreground = (Brush)FindResource("AccentGold"),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 120
+                });
+            }
+            else
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = "Empty",
+                    FontSize = 9,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Foreground = (Brush)FindResource("DimText")
+                });
+            }
 
             var btn = new Button
             {
-                Content = displayText,
+                Content = content,
                 Tag = slot,
-                Margin = new Thickness(2),
-                Padding = new Thickness(4),
-                FontSize = 10,
+                Margin = new Thickness(3),
+                Padding = new Thickness(6, 8, 6, 8),
+                MinHeight = 44,
                 Cursor = Cursors.Hand,
                 Background = hasTarget
-                    ? new SolidColorBrush(Color.FromArgb(0x33, 0x44, 0xDD, 0x88))
+                    ? new SolidColorBrush(Color.FromArgb(0x44, 0x44, 0xDD, 0x88))
                     : new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
-                Foreground = hasTarget
-                    ? (Brush)FindResource("AccentGreen")
-                    : (Brush)FindResource("SubText"),
-                BorderThickness = new Thickness(0)
+                BorderBrush = hasTarget
+                    ? new SolidColorBrush(Color.FromArgb(0x55, 0x44, 0xDD, 0x88))
+                    : new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1)
             };
             btn.Click += DreamSlotButton_OnClick;
             DreamBuildGrid.Children.Add(btn);
         }
     }
+
+    private static string FormatSlotName(EquipmentSlot slot) => slot switch
+    {
+        EquipmentSlot.BodyArmour => "Body",
+        EquipmentSlot.Ring1 => "Ring 1",
+        EquipmentSlot.Ring2 => "Ring 2",
+        _ => slot.ToString()
+    };
 
     private void DreamSlotButton_OnClick(object sender, RoutedEventArgs e)
     {
@@ -904,6 +948,66 @@ public partial class MainWindow : Window
         _profileManager.CreateFromArchetype(name, Archetype.Balanced);
         _config.ActiveProfile = name;
         RefreshProfileList();
+    }
+
+    private void SaveProfileButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_activeProfile == null) return;
+        _profileManager.Save(_activeProfile);
+        ConfigService.Save(_config);
+
+        SettingsStatusText.Text = "Profile saved!";
+        SettingsStatusText.Visibility = Visibility.Visible;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        timer.Tick += (_, _) =>
+        {
+            SettingsStatusText.Visibility = Visibility.Collapsed;
+            timer.Stop();
+        };
+        timer.Start();
+    }
+
+    private void DeleteProfileButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_activeProfile == null) return;
+
+        var profiles = _profileManager.ListProfiles();
+        if (profiles.Count <= 1)
+        {
+            SettingsStatusText.Text = "Can't delete the last profile";
+            SettingsStatusText.Foreground = (Brush)FindResource("ErrorRed");
+            SettingsStatusText.Visibility = Visibility.Visible;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            t.Tick += (_, _) =>
+            {
+                SettingsStatusText.Visibility = Visibility.Collapsed;
+                SettingsStatusText.Foreground = (Brush)FindResource("AccentGreen");
+                t.Stop();
+            };
+            t.Start();
+            return;
+        }
+
+        var deleteName = _activeProfile.ProfileName;
+        _profileManager.Delete(deleteName);
+
+        // Switch to first remaining profile
+        var remaining = _profileManager.ListProfiles();
+        _config.ActiveProfile = remaining[0];
+        _activeProfile = _profileManager.Load(remaining[0]);
+        ConfigService.Save(_config);
+        RefreshProfileList();
+        BuildDreamBuildGrid();
+
+        SettingsStatusText.Text = $"Deleted \"{deleteName}\"";
+        SettingsStatusText.Visibility = Visibility.Visible;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        timer.Tick += (_, _) =>
+        {
+            SettingsStatusText.Visibility = Visibility.Collapsed;
+            timer.Stop();
+        };
+        timer.Start();
     }
 
     // ═══════════════════════════════════════════════════
