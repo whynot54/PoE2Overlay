@@ -242,6 +242,29 @@
                     </Button.Template>
                 </Button>
 
+                <!-- Compare mode toggle -->
+                <Button x:Name="CompareModeButton"
+                        DockPanel.Dock="Left"
+                        Click="CompareModeButton_OnClick"
+                        Content="&#x2696;"
+                        Width="28" Height="28"
+                        Cursor="Hand" ToolTip="Switch to Compare mode"
+                        Margin="4,0,0,0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid>
+                                <Ellipse x:Name="BgEllipse" Fill="Transparent" Width="28" Height="28" />
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="BgEllipse" Property="Fill" Value="#33FFFFFF" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
                 <!-- Status text in the middle -->
                 <TextBlock x:Name="StatusText" Text="Stopped"
                            FontSize="11" Foreground="#777777"
@@ -299,9 +322,64 @@
                         Value="93" IsSnapToTickEnabled="True" TickFrequency="1"
                         ValueChanged="OpacitySlider_OnValueChanged" />
 
+                <!-- Account Name -->
+                <TextBlock Text="Account Name" FontSize="11" Foreground="{StaticResource DimText}"
+                           Margin="0,12,0,4" />
+                <TextBox x:Name="AccountNameTextBox" FontSize="11"
+                         Background="#22FFFFFF" Foreground="#CCCCCC"
+                         BorderBrush="#33FFFFFF" Padding="6,4"
+                         Height="26" />
+
+                <!-- Dream Build Section -->
+                <Rectangle Height="1" Fill="{StaticResource SeparatorBrush}" Margin="0,12,0,10" />
+                <TextBlock Text="Dream Build" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{StaticResource BrightText}" Margin="0,0,0,8" />
+
+                <DockPanel Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" Content="New" Style="{StaticResource ActionButton}"
+                            Click="NewProfileButton_OnClick" Margin="4,0,0,0" />
+                    <ComboBox x:Name="ProfileComboBox" FontSize="12"
+                              SelectionChanged="ProfileComboBox_OnSelectionChanged"
+                              Background="#22FFFFFF" Foreground="Black" Height="28" />
+                </DockPanel>
+
+                <TextBlock Text="Archetype" FontSize="11" Foreground="{StaticResource DimText}" Margin="0,0,0,4" />
+                <ComboBox x:Name="ArchetypeComboBox" FontSize="12"
+                          SelectionChanged="ArchetypeComboBox_OnSelectionChanged"
+                          Background="#22FFFFFF" Foreground="Black" Height="28" />
+
+                <TextBlock Text="Display Mode" FontSize="11" Foreground="{StaticResource DimText}" Margin="0,8,0,4" />
+                <ComboBox x:Name="DisplayModeComboBox" FontSize="12"
+                          SelectionChanged="DisplayModeComboBox_OnSelectionChanged"
+                          Background="#22FFFFFF" Foreground="Black" Height="28" />
+
+                <UniformGrid x:Name="DreamBuildGrid" Columns="2" Margin="0,8,0,0" />
+
+                <Border x:Name="DreamSearchPanel" Visibility="Collapsed"
+                        Margin="0,8,0,0" Padding="8" CornerRadius="6"
+                        Background="#22FFFFFF">
+                    <StackPanel>
+                        <TextBlock x:Name="DreamSearchSlotLabel" FontSize="11"
+                                   Foreground="{StaticResource AccentGold}" Margin="0,0,0,4" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Search" Style="{StaticResource ActionButton}"
+                                    Click="DreamSearchButton_OnClick" Margin="4,0,0,0" />
+                            <TextBox x:Name="DreamSearchTextBox" FontSize="11"
+                                     Background="#22FFFFFF" Foreground="#CCCCCC"
+                                     BorderBrush="#33FFFFFF" Padding="6,4" Height="26" />
+                        </DockPanel>
+                        <StackPanel x:Name="DreamSearchResults" Margin="0,4,0,0" />
+                        <Button x:Name="DreamClearButton" Content="Clear slot" Style="{StaticResource ActionButton}"
+                                Click="DreamClearButton_OnClick" Margin="0,4,0,0"
+                                HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
+
+                <Rectangle Height="1" Fill="{StaticResource SeparatorBrush}" Margin="0,12,0,10" />
+
                 <!-- POESESSID -->
                 <TextBlock Text="POESESSID" FontSize="11" Foreground="{StaticResource DimText}"
-                           Margin="0,12,0,4" />
+                           Margin="0,0,0,4" />
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -320,6 +398,19 @@
                 <TextBlock x:Name="SettingsStatusText" FontSize="10"
                            Foreground="{StaticResource AccentGreen}"
                            Margin="0,8,0,0" Visibility="Collapsed" />
+
+                <!-- Update Stat Definitions -->
+                <Rectangle Height="1" Fill="{StaticResource SeparatorBrush}" Margin="0,12,0,10" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Update Now" Style="{StaticResource ActionButton}"
+                            Click="UpdateStatDefsButton_OnClick" />
+                    <StackPanel>
+                        <TextBlock Text="Stat Definitions" FontSize="11"
+                                   Foreground="{StaticResource BrightText}" />
+                        <TextBlock x:Name="StatDefsVersionText" FontSize="10"
+                                   Foreground="{StaticResource DimText}" />
+                    </StackPanel>
+                </DockPanel>
 
                 <!-- Exit button -->
                 <Rectangle Height="1" Fill="{StaticResource SeparatorBrush}" Margin="0,12,0,10" />

@@ -1,8 +1,10 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -25,6 +27,14 @@ public partial class MainWindow : Window
     private PriceResult? _currentPriceResult;
     private bool _listingsExpanded;
     private bool _monitoringActive;
+    private bool _compareMode;
+    private CharacterApiClient? _characterApi;
+    private ImmutableDictionary<EquipmentSlot, ItemData> _equippedItems = ImmutableDictionary<EquipmentSlot, ItemData>.Empty;
+    private readonly StatDefinitionService _statDefService = new();
+    private ItemScoringService? _scoringService;
+    private readonly ProfileManager _profileManager = new();
+    private WeightProfile? _activeProfile;
+    private EquipmentSlot? _dreamSearchSlot;
 
     public MainWindow()
     {
@@ -72,6 +82,18 @@ public partial class MainWindow : Window
 
         await _leagueService.InitializeAsync();
         InitializeSettings();
+
+        _statDefService.Load();
+        _scoringService = new ItemScoringService(_statDefService);
+        LoadActiveProfile();
+    }
+
+    private void LoadActiveProfile()
+    {
+        var profileName = _config.ActiveProfile;
+        if (string.IsNullOrEmpty(profileName))
+            profileName = "Default";
+        _activeProfile = _profileManager.Load(profileName);
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
@@ -114,6 +136,10 @@ public partial class MainWindow : Window
         PoeSessIdTextBox.Text = _config.PoeSessId.Length > 8
             ? new string('*', _config.PoeSessId.Length - 8) + _config.PoeSessId[^8..]
             : _config.PoeSessId;
+
+        AccountNameTextBox.Text = _config.AccountName;
+        StatDefsVersionText.Text = $"v{_statDefService.Version} \u2014 Updated: {_statDefService.LastUpdated}";
+        InitializeProfileUI();
     }
 
     // ═══════════════════════════════════════════════════
@@ -125,8 +151,15 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             var item = ItemParser.Parse(clipboardText);
-            ShowItemTooltip(item);
-            _ = FetchPriceAsync(item);
+            if (_compareMode)
+            {
+                ShowComparisonTooltip(item);
+            }
+            else
+            {
+                ShowItemTooltip(item);
+                _ = FetchPriceAsync(item);
+            }
         });
     }
 
@@ -455,6 +488,7 @@ public partial class MainWindow : Window
             _tradeApi = new TradeApiClient(_config.PoeSessId);
         }
 
+        _config.AccountName = AccountNameTextBox.Text.Trim();
         ConfigService.Save(_config);
 
         SettingsStatusText.Text = "Settings saved!";
@@ -494,6 +528,407 @@ public partial class MainWindow : Window
 
             DismissTooltip();
             e.Handled = true;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // COMPARE MODE
+    // ═══════════════════════════════════════════════════
+
+    private async void CompareModeButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_compareMode)
+        {
+            _compareMode = false;
+            CompareModeButton.ToolTip = "Switch to Compare mode";
+            StatusText.Text = _monitoringActive ? "Monitoring" : "Stopped";
+            StatusText.Foreground = _monitoringActive
+                ? (Brush)FindResource("AccentGreen")
+                : (Brush)FindResource("DimText");
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(_config.AccountName))
+            {
+                StatusText.Text = "Set account name in settings";
+                StatusText.Foreground = (Brush)FindResource("ErrorRed");
+                return;
+            }
+
+            StatusText.Text = "Fetching gear...";
+            StatusText.Foreground = (Brush)FindResource("AccentGold");
+
+            try
+            {
+                _characterApi = new CharacterApiClient(_config.PoeSessId);
+                var characters = await _characterApi.GetCharactersAsync(_config.AccountName);
+
+                if (characters.Count == 0)
+                {
+                    StatusText.Text = "No characters found";
+                    StatusText.Foreground = (Brush)FindResource("ErrorRed");
+                    return;
+                }
+
+                var league = _leagueService.CurrentLeague;
+                var character = characters.FirstOrDefault(c =>
+                    c.League.Equals(league, StringComparison.OrdinalIgnoreCase))
+                    ?? characters[0];
+
+                _equippedItems = await _characterApi.GetEquippedItemsAsync(_config.AccountName, character.Name);
+
+                _compareMode = true;
+                CompareModeButton.ToolTip = "Switch to Price Check mode";
+                StatusText.Text = $"Compare: {character.Name} ({_equippedItems.Count} slots)";
+                StatusText.Foreground = (Brush)FindResource("AccentGold");
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"API error: {ex.Message}";
+                StatusText.Foreground = (Brush)FindResource("ErrorRed");
+            }
+        }
+
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
+    }
+
+    private void ShowComparisonTooltip(ItemData droppedItem)
+    {
+        var slot = ItemParser.DetectSlot(droppedItem);
+        if (slot == null)
+        {
+            ShowItemTooltip(droppedItem);
+            PriceLoadingText.Visibility = Visibility.Collapsed;
+            PriceErrorText.Text = "Cannot determine equipment slot";
+            PriceErrorText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        if (!_equippedItems.TryGetValue(slot.Value, out var equippedItem))
+        {
+            ShowItemTooltip(droppedItem);
+            PriceLoadingText.Visibility = Visibility.Collapsed;
+            PriceErrorText.Text = "No equipped item in this slot";
+            PriceErrorText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        if (_scoringService == null || _activeProfile == null)
+        {
+            ShowItemTooltip(droppedItem);
+            PriceLoadingText.Visibility = Visibility.Collapsed;
+            PriceErrorText.Text = "Scoring service not ready";
+            PriceErrorText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var slotKey = slot.Value.ToString();
+        ItemData? dreamTarget = null;
+        if (_activeProfile.DreamBuild.TryGetValue(slotKey, out var dt))
+            dreamTarget = dt;
+
+        var result = _scoringService.Compare(droppedItem, equippedItem, dreamTarget, _activeProfile.Weights);
+
+        ShowItemTooltip(droppedItem);
+
+        PriceLoadingText.Visibility = Visibility.Collapsed;
+        ActionButtonsPanel.Visibility = Visibility.Collapsed;
+
+        var verdictSymbol = result.Verdict switch
+        {
+            ComparisonVerdict.Upgrade => "\u25B2",
+            ComparisonVerdict.Downgrade => "\u25BC",
+            _ => "\u2501"
+        };
+
+        var verdictColor = result.Verdict switch
+        {
+            ComparisonVerdict.Upgrade => FindResource("AccentGreen") as Brush,
+            ComparisonVerdict.Downgrade => FindResource("ErrorRed") as Brush,
+            _ => FindResource("AccentGold") as Brush
+        };
+
+        var verdictText = result.Verdict switch
+        {
+            ComparisonVerdict.Upgrade => "UPGRADE",
+            ComparisonVerdict.Downgrade => "DOWNGRADE",
+            _ => "SIDEGRADE"
+        };
+
+        PriceText.Text = $"{verdictSymbol} {verdictText}  Score: {result.DroppedTotalScore:F0} vs {result.EquippedTotalScore:F0}";
+        PriceText.Foreground = verdictColor;
+        PriceText.Visibility = Visibility.Visible;
+
+        var detailText = string.Empty;
+        if (_activeProfile.DisplayMode == CompareDisplayMode.CategoryBreakdown
+            || _activeProfile.DisplayMode == CompareDisplayMode.FullStatDiff)
+        {
+            var lines = result.CategoryScores
+                .Where(c => Math.Abs(c.Difference) > 0.1)
+                .Select(c =>
+                {
+                    var sign = c.Difference > 0 ? "+" : "";
+                    return $"{c.DisplayName}: {sign}{c.Difference:F0}";
+                });
+            detailText = string.Join("\n", lines);
+        }
+
+        if (_activeProfile.DisplayMode == CompareDisplayMode.FullStatDiff && result.StatDiffs.Count > 0)
+        {
+            if (detailText.Length > 0)
+                detailText += "\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500";
+
+            var diffLines = result.StatDiffs
+                .Where(d => !d.IsUnscored)
+                .Select(d =>
+                {
+                    var prefix = d.IsGain ? "+" : "-";
+                    return $"{prefix} {d.ModLine}";
+                });
+            detailText += "\n" + string.Join("\n", diffLines);
+        }
+
+        if (result.UnscoredMods.Count > 0)
+        {
+            detailText += $"\n\n? {result.UnscoredMods.Count} unscored mod(s)";
+        }
+
+        ListingCountText.Text = detailText;
+        ListingCountText.Foreground = (Brush)FindResource("SubText");
+        ListingCountText.Visibility = string.IsNullOrEmpty(detailText) ? Visibility.Collapsed : Visibility.Visible;
+
+        if (result.DreamPercentOfTarget.HasValue)
+        {
+            PriceErrorText.Text = $"vs Dream: {result.DreamPercentOfTarget:F0}% of target";
+            PriceErrorText.Foreground = result.DreamPercentOfTarget >= 100
+                ? (Brush)FindResource("AccentGreen")
+                : (Brush)FindResource("AccentGold");
+            PriceErrorText.Visibility = Visibility.Visible;
+        }
+
+        Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
+    }
+
+    // ═══════════════════════════════════════════════════
+    // PROFILE & DREAM BUILD
+    // ═══════════════════════════════════════════════════
+
+    private void InitializeProfileUI()
+    {
+        ArchetypeComboBox.Items.Clear();
+        foreach (var archetype in Enum.GetValues<Archetype>())
+            ArchetypeComboBox.Items.Add(archetype.ToString());
+
+        DisplayModeComboBox.Items.Clear();
+        DisplayModeComboBox.Items.Add("Simple");
+        DisplayModeComboBox.Items.Add("Category Breakdown");
+        DisplayModeComboBox.Items.Add("Full Stat Diff");
+
+        RefreshProfileList();
+        BuildDreamBuildGrid();
+    }
+
+    private void RefreshProfileList()
+    {
+        ProfileComboBox.Items.Clear();
+        var profiles = _profileManager.ListProfiles();
+        if (profiles.Count == 0)
+        {
+            _profileManager.CreateFromArchetype("Default", Archetype.Balanced);
+            profiles = _profileManager.ListProfiles();
+        }
+        foreach (var name in profiles)
+            ProfileComboBox.Items.Add(name);
+        ProfileComboBox.SelectedItem = _config.ActiveProfile;
+    }
+
+    private void BuildDreamBuildGrid()
+    {
+        DreamBuildGrid.Children.Clear();
+        foreach (var slot in Enum.GetValues<EquipmentSlot>())
+        {
+            var slotName = slot.ToString();
+            ItemData? item = null;
+            var hasTarget = _activeProfile?.DreamBuild.TryGetValue(slotName, out item) == true && item != null;
+            var displayText = hasTarget ? $"{slotName}\n{item!.Name}" : slotName;
+
+            var btn = new Button
+            {
+                Content = displayText,
+                Tag = slot,
+                Margin = new Thickness(2),
+                Padding = new Thickness(4),
+                FontSize = 10,
+                Cursor = Cursors.Hand,
+                Background = hasTarget
+                    ? new SolidColorBrush(Color.FromArgb(0x33, 0x44, 0xDD, 0x88))
+                    : new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+                Foreground = hasTarget
+                    ? (Brush)FindResource("AccentGreen")
+                    : (Brush)FindResource("SubText"),
+                BorderThickness = new Thickness(0)
+            };
+            btn.Click += DreamSlotButton_OnClick;
+            DreamBuildGrid.Children.Add(btn);
+        }
+    }
+
+    private void DreamSlotButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is EquipmentSlot slot)
+        {
+            _dreamSearchSlot = slot;
+            DreamSearchSlotLabel.Text = $"Set target for: {slot}";
+            DreamSearchTextBox.Text = string.Empty;
+            DreamSearchResults.Children.Clear();
+            DreamSearchPanel.Visibility = Visibility.Visible;
+            Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
+        }
+    }
+
+    private async void DreamSearchButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var searchTerm = DreamSearchTextBox.Text.Trim();
+        if (string.IsNullOrEmpty(searchTerm) || _dreamSearchSlot == null)
+            return;
+
+        DreamSearchResults.Children.Clear();
+        DreamSearchResults.Children.Add(new TextBlock
+        {
+            Text = "Searching...",
+            FontSize = 10,
+            Foreground = (Brush)FindResource("SubText"),
+            FontStyle = FontStyles.Italic
+        });
+
+        try
+        {
+            var league = _leagueService.CurrentLeague;
+            var searchItem = new ItemData
+            {
+                Name = searchTerm,
+                Rarity = ItemRarity.Unique,
+                BaseType = searchTerm
+            };
+
+            var result = await _tradeApi.PriceCheckAsync(searchItem, league);
+            DreamSearchResults.Children.Clear();
+
+            if (result == null || result.Listings.Count == 0)
+            {
+                DreamSearchResults.Children.Add(new TextBlock
+                {
+                    Text = "No items found",
+                    FontSize = 10,
+                    Foreground = (Brush)FindResource("ErrorRed")
+                });
+                return;
+            }
+
+            var setBtn = new Button
+            {
+                Content = $"Set \"{searchTerm}\" as target",
+                Style = (Style)FindResource("ActionButton"),
+                Tag = searchTerm,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            setBtn.Click += (_, _) =>
+            {
+                if (_activeProfile != null && _dreamSearchSlot != null)
+                {
+                    var targetItem = new ItemData { Name = searchTerm, BaseType = searchTerm };
+                    _activeProfile.DreamBuild[_dreamSearchSlot.Value.ToString()] = targetItem;
+                    _profileManager.Save(_activeProfile);
+                    BuildDreamBuildGrid();
+                    DreamSearchPanel.Visibility = Visibility.Collapsed;
+                }
+            };
+            DreamSearchResults.Children.Add(setBtn);
+        }
+        catch (Exception ex)
+        {
+            DreamSearchResults.Children.Clear();
+            DreamSearchResults.Children.Add(new TextBlock
+            {
+                Text = $"Search failed: {ex.Message}",
+                FontSize = 10,
+                Foreground = (Brush)FindResource("ErrorRed"),
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+    }
+
+    private void DreamClearButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_activeProfile != null && _dreamSearchSlot != null)
+        {
+            _activeProfile.DreamBuild[_dreamSearchSlot.Value.ToString()] = null;
+            _profileManager.Save(_activeProfile);
+            BuildDreamBuildGrid();
+            DreamSearchPanel.Visibility = Visibility.Collapsed;
+            Dispatcher.InvokeAsync(PositionBottomRight, DispatcherPriority.Loaded);
+        }
+    }
+
+    private void ProfileComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ProfileComboBox.SelectedItem is not string selected) return;
+        _config.ActiveProfile = selected;
+        _activeProfile = _profileManager.Load(selected);
+        ArchetypeComboBox.SelectedItem = _activeProfile.Archetype.ToString();
+        DisplayModeComboBox.SelectedIndex = (int)_activeProfile.DisplayMode;
+        BuildDreamBuildGrid();
+    }
+
+    private void ArchetypeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _activeProfile == null) return;
+        if (ArchetypeComboBox.SelectedItem is not string selected) return;
+        if (!Enum.TryParse<Archetype>(selected, out var archetype)) return;
+
+        _activeProfile.Archetype = archetype;
+        _activeProfile.Weights = new Dictionary<string, int>(ProfileManager.GetPresetWeights(archetype));
+        _profileManager.Save(_activeProfile);
+    }
+
+    private void DisplayModeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _activeProfile == null) return;
+        _activeProfile.DisplayMode = (CompareDisplayMode)DisplayModeComboBox.SelectedIndex;
+        _profileManager.Save(_activeProfile);
+    }
+
+    private void NewProfileButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var name = $"Profile {_profileManager.ListProfiles().Count + 1}";
+        _profileManager.CreateFromArchetype(name, Archetype.Balanced);
+        _config.ActiveProfile = name;
+        RefreshProfileList();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // STAT DEFINITIONS UPDATE
+    // ═══════════════════════════════════════════════════
+
+    private async void UpdateStatDefsButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        StatDefsVersionText.Text = "Updating...";
+        try
+        {
+            var success = await _statDefService.UpdateFromRemoteAsync();
+            if (success)
+            {
+                _scoringService = new ItemScoringService(_statDefService);
+                StatDefsVersionText.Text = $"v{_statDefService.Version} \u2014 Updated: {_statDefService.LastUpdated}";
+            }
+            else
+            {
+                StatDefsVersionText.Text = "Update failed \u2014 using cached version";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatDefsVersionText.Text = $"Update failed: {ex.Message}";
         }
     }
 
